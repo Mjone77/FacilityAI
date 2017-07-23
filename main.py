@@ -6,7 +6,6 @@ import praw
 import random
 import sys
 import configparser
-import OAuth2Util
 #import discord
 #import asyncio
 
@@ -25,6 +24,10 @@ try:
     alreadyWelcomed.pop()
     seenPosts = config['Technical']['seenPosts'].split(',')
     seenPosts.pop()
+    username = config['Cred']['username']
+    password = config['Cred']['password']
+    botID = config['Cred']['id']
+    botSecret = config['Cred']['Secret']
 #    token = config['Accnt']['discordToken'] #the token for discord
 except Exception as e:
     print(str(e))
@@ -36,6 +39,10 @@ except Exception as e:
                            'alreadyWelcomed': '',
                            'seenPosts': '',
                            'alreadyRepliedPm': ''}
+    config['Cred'] = {'username':'',
+                      'password':'',
+                      'id':'',
+                      'secret':''}
 #    config['Accnt'] = {'discordToken': ''}
     with open('config-new.ini','w') as configfile:
         config.write(configfile)
@@ -43,9 +50,16 @@ except Exception as e:
     sys.exit()
 
 #log's on to reddit here and set the subreddit
-r = praw.Reddit('Assists role playing in secretsubreddit')
+r = praw.Reddit(client_id=botID,
+                     client_secret=botSecret,
+                     user_agent='A bot for roleplaying',
+                     username=username,
+                     password=password)
+#outdated oauth
+'''
 o = OAuth2Util.OAuth2Util(r)
 o.refresh(force=True)
+'''
 subreddit = r.get_subreddit('secretsubreddit')
 #Set up variables
 message = "" #add replies to this. Make sure to add a \n___\n (3 underscores) after every message. Hopefully this will allow multiple commands to be called with one comment
