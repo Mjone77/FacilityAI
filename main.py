@@ -7,8 +7,8 @@ import random
 import sys
 import configparser
 import OAuth2Util
-import discord
-import asyncio
+#import discord
+#import asyncio
 
 #This sets up the variables and junk from the ini file, also creates an ini file if it is missing
 try:
@@ -19,11 +19,13 @@ try:
     admins = config['Admin']['users'].lower().split(',')
     alreadyReplied = config['Technical']['alreadyReplied'].split(',')
     alreadyReplied.pop() #removes empty item on the end
+    alreadyRepliedPm = config['Technical']['alreadyRepliedPm'].split(',')
+    alreadyRepliedPm.pop() #removes empty item on the end
     alreadyWelcomed = config['Technical']['alreadyWelcomed'].split(',')
     alreadyWelcomed.pop()
     seenPosts = config['Technical']['seenPosts'].split(',')
     seenPosts.pop()
-    token = config['Accnt']['discordToken'] #the token for discord
+#    token = config['Accnt']['discordToken'] #the token for discord
 except Exception as e:
     print(str(e))
     config = configparser.ConfigParser()
@@ -32,15 +34,16 @@ except Exception as e:
     config['Admin'] = {'users': ''}
     config['Technical'] = {'alreadyReplied': '',
                            'alreadyWelcomed': '',
-                           'seenPosts': ''}
-    config['Accnt'] = {'discordToken': ''}
+                           'seenPosts': '',
+                           'alreadyRepliedPm': ''}
+#    config['Accnt'] = {'discordToken': ''}
     with open('config-new.ini','w') as configfile:
         config.write(configfile)
     print("Please complete generated config-new.ini")
     sys.exit()
 
 #log's on to reddit here and set the subreddit
-r = praw.Reddit('who really cares what goes here???')
+r = praw.Reddit('Assists role playing in secretsubreddit')
 o = OAuth2Util.OAuth2Util(r)
 o.refresh(force=True)
 subreddit = r.get_subreddit('secretsubreddit')
@@ -55,12 +58,13 @@ for line in welcomeMessageLines:
 messageEnd = "[meta][See all my commands](http://secretsubreddit.wikia.com/wiki/FacilityAI)|[suggest new features](https://www.reddit.com/message/compose/?to=Mjone77&subject=FacilityAI_Suggestion)|[report bugs/errors](https://www.reddit.com/message/compose/?to=Mjone77&subject=FacilityAI_Report)"
 refreshMsgLines = refreshMessage.split('\n')
 
+'''
 #creates a client object for discord
 client = discord.Client()
-
+'''
 
 #Add comment or post id's to array and config.ini
-#idType: 0 is a comment.id, 1 is a username
+#idType: 0 is a comment.id, 1 is a username, 2 is for post, 3 is for pm's
 def addID(idToAdd, idType):
     if idType == 0:
         alreadyReplied.append(idToAdd)
@@ -69,6 +73,15 @@ def addID(idToAdd, idType):
         config['Technical']['alreadyReplied']= ''
         for comment in alreadyReplied:
             config['Technical']['alreadyReplied']+=(comment+',')
+
+    elif idType == 3:
+        alreadyReplied.append(idToAdd)
+        while (len(alreadyReplied)>100): #only keep 100 most recent replied comments
+            alreadyRepliedPm.pop(0)
+        config['Technical']['alreadyRepliedPm']= ''
+        for comment in alreadyReplied:
+            config['Technical']['alreadyRepliedPm']+=(comment+',')
+
     elif idType == 1:
         alreadyWelcomed.append(idToAdd)
         config['Technical']['alreadyWelcomed']+=(idToAdd+',')
@@ -81,31 +94,35 @@ def addID(idToAdd, idType):
             config['Technical']['seenPosts']+=(post+',')
     global needSave
     needSave = True
-    
+
 #Checks the comments/posts/pm's for commands, and handles them
-async def checkForCommands():
+def checkForCommands():
     global message
     recentComments = r.get_comments('secretsubreddit')
     #Checks for commands in comments
     for comment in recentComments:
-        analyzeText(comment)
+        analyzeText(comment,0)
     #checks for commands in pm's
     for comment in r.get_unread(unset_has_mail=True, update_user=True):
-        analyzeText(comment)
+        analyzeText(comment,1)
+    #check if new poster is known
     for submission in subreddit.get_new(limit=3):
         if str(submission.author) not in alreadyWelcomed:
             addID(str(submission.author), 1)
             message = ''
             #welcome(submission)
-        if str(submission.id) not in seenPosts:
+        #discord stuff
+        '''
+        if str(submission.id) not in eenPosts:
             await announcePost(submission)
             addID(submission.id, 2)
+        '''
 
 #searches for possible commands in a comment/pm, then passes them on to be searched and replied to
-def analyzeText(comment):
+def analyzeText(comment,commentOrPm):
     global message
     if '!' in comment.body and str(comment.id) not in alreadyReplied and str(comment.author) != 'FacilityAI':
-        addID(str(comment.id), 0)
+        addID(str(comment.id), commentOrPm)
         links = []
         try:
             links.append(comment.permalink)
@@ -116,7 +133,7 @@ def analyzeText(comment):
         if message:
             commentReply(comment)
             message = ''
-        
+
 #searches a string for commands
 def searchForCommands(body, author, links):
     global message
@@ -137,6 +154,8 @@ def searchForCommands(body, author, links):
         cake()
     if '!refresh' in commentWords:
         refreshMemory()
+    #encryption doesn't work and nobody uses it anyway so it's disabled
+    '''
     if '!encrypt' in commentWords:
         try:
             msg = body[body.lower().find('!encrypt'):len(body)].split('"')[1]
@@ -151,6 +170,7 @@ def searchForCommands(body, author, links):
             message+=a1z26Rev(offset,msg)+'\n___\n'
         except:
             message+='In order to decrypt a message, please comment like this:\n!decrypt offset "message to decrypt"\nOffset is a number, normally 0. The message must be surrounded by ", this allows you continue your comment past the command if you\'d like\n___\n'
+    '''
     if '!nowelcome' in commentWords and str(author) not in alreadyWelcomed:
         print(str(author))
         addID(str(author),1)
@@ -264,7 +284,7 @@ def commentReply(comment): #Don't forget takes in comment
     global message
     comment.reply(message+messageEnd)
     #is there a way to do the ^^ effect without having to do it before every word?
-    
+
 #rolls dice and saves each roll in an array, total of the rolls is at the end of the array. This is done so that a table of the rolls can be made if needed.
 #command can be '!roll 5d6' or something like that
 #ready for initial usage in the bot - can be upgraded later
@@ -308,7 +328,7 @@ def welcome(submission):
     message+=welcomeMessage+"\n"
     refreshMemory()
     submission.add_comment(message+messageEnd)
-    
+
 #this is the second part of the welcome message that people can ask for on demand
 #ready for initial usage in the bot - can be upgraded later
 def refreshMemory():
@@ -317,12 +337,13 @@ def refreshMemory():
         message+='The refresh message is over 10k characters long and can not fit in a Reddit comment, please have my admins remove old descriptions or have users remove themselves from the description.\n___\n'
     else:
         message+=refreshMessage+'\n___\n'
-    
+
 #saves changes to config file
 def saveConfig():
     with open('config.ini','w') as configfile:
         config.write(configfile)
-        
+
+'''
 #Takes in a number and makes it between 1 and 26, used for a1z26
 def valueBetween1And26(num):
     while(num<1 or num>26):
@@ -330,8 +351,8 @@ def valueBetween1And26(num):
             num-=26
         elif num<1:
             num+=26
- 
-#encrypts a string into a1z26 using an offset to shift the numbers around           
+
+#encrypts a string into a1z26 using an offset to shift the numbers around
 def a1z26(offset, msg):
     letters = list(msg.upper())
     nums = ""
@@ -377,6 +398,7 @@ def a1z26Rev(offset, msg):
         valueBetween1And26(finalNum)
         lets = lets+str(chr(finalNum+64))
     return lets
+'''
 
 #sends a PM to an array of 'users' with a 'custom' message and tells the 'sender' that requested the notification
 def summon(sender, users, custom, links):
@@ -462,7 +484,7 @@ def reconstructRefresh():
             firstline = False
     config['Welcome']['refresh']=refreshMessage
     needSave = True
-
+'''
 ######################################################
 #              DISCORD BOT BELOW                     #
 ######################################################
@@ -477,8 +499,8 @@ async def announcePost(post):
 ######################################################
 #               DISCORD BOT END                      #
 ######################################################
-
-
+'''
+'''
 #this is the task that runs the entire bot
 async def backgroundTask():
     global needSave
@@ -506,16 +528,16 @@ while True:
     except:
         pass
 
-
+'''
 #this is the old infinite loop
 #Call everything the bot needs to do here, then write the code above
-#while True:
-#     try:
-#         checkForCommands()
-#         if needSave:
-#             saveConfig()
-#             needSave = False
-#         time.sleep(10)
-#     except Exception as e:
-#         print(e)
-#         time.sleep(30) #we can change the time to whatever
+while True:
+     try:
+         checkForCommands()
+         if needSave:
+             saveConfig()
+             needSave = False
+         time.sleep(10)
+     except Exception as e:
+         print(e)
+         time.sleep(30) #we can change the time to whatever
